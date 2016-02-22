@@ -81,25 +81,111 @@ angular.module('starter.controllers', []).controller('AppCtrl', function($scope,
             console.log($scope.loginErrorText);
             $rootScope.loginErrorText = res.data.error;
         });
-    }    
-}).controller('JokesCtrl', function($scope) {
-    $scope.jokes = [{
-        joke: 'First Joke',
-        id: 1
-    }, {
-        joke: 'Second Joke',
-        id: 2
-    }, {
-        joke: 'Third Joke',
-        id: 3
-    }, {
-        joke: 'Fourth Joke',
-        id: 4
-    }, {
-        joke: 'Fifth Joke',
-        id: 5
-    }, {
-        joke: 'Sixth Joke',
-        id: 6
-    }];
-})
+    }
+}).controller('JokesCtrl', function($scope, $auth, $http, $ionicPopup, $rootScope) {
+    $scope.jokes = [];
+    $scope.error;
+    $scope.joke;
+    $scope.listCanSwipe = true;
+    // Update Popup
+    $scope.updatePopup = function(joke, label) {
+        console.log(joke, label);
+        $scope.data = joke;
+        var myPopup = $ionicPopup.show({
+            template: '<input type="text" ng-model="data.joke">',
+            title: 'Update Joke',
+            // subTitle: 'Please use normal things',
+            scope: $scope,
+            buttons: [
+                // { text: 'Cancel' },
+                {
+                    text: '<b>' + label + '</b>',
+                    type: 'button-positive',
+                    onTap: function(e) {
+                        if (!$scope.data.joke) {
+                            e.preventDefault();
+                        } else {
+                            return $scope.data;
+                        }
+                    }
+                }
+            ]
+        });
+        myPopup.then(function(res) {
+            $scope.updateJoke(res);
+            console.log(res);
+        });
+    };
+    $scope.init = function() {
+        $scope.lastpage = 1;
+        $http({
+            url: 'http://localhost:8000/api/v1/jokes',
+            method: "GET",
+            params: {
+                page: $scope.lastpage
+            }
+        }).success(function(jokes, status, headers, config) {
+            $scope.jokes = jokes.data;
+            $scope.currentpage = jokes.current_page;
+        });
+    };
+    $scope.noMoreItemsAvailable = false;
+    $scope.loadMore = function(limit) {
+        console.log("Load More Called");
+        if (!limit) {
+            limit = 5;
+        }
+        $scope.lastpage += 1;
+        $http({
+            url: 'http://localhost:8000/api/v1/jokes',
+            method: "GET",
+            params: {
+                limit: limit,
+                page: $scope.lastpage
+            }
+        }).success(function(jokes, status, headers, config) {
+            console.log(jokes);
+            if (jokes.next_page_url == null) {
+                $scope.noMoreItemsAvailable = true;
+            }
+            $scope.jokes = $scope.jokes.concat(jokes.data);
+        });
+        $scope.$broadcast('scroll.infiniteScrollComplete');
+    };
+    $scope.addJoke = function(joke) {
+        console.log("add joke: ", joke);
+        $http.post('http://localhost:8000/api/v1/jokes', {
+            body: joke,
+            user_id: $rootScope.currentUser.id
+        }).success(function(response) {
+            $scope.jokes.unshift(response.data);
+            console.log($scope.jokes);
+            $scope.joke = '';
+            console.log("Joke Created Successfully");
+        }).error(function() {
+            console.log("error");
+        });
+    };
+    $scope.updateJoke = function(joke) {
+        console.log(joke);
+        $http.put('http://localhost:8000/api/v1/jokes/' + joke.joke_id, {
+            body: joke.joke,
+            user_id: $rootScope.currentUser.id
+        }).success(function(response) {
+            console.log("Joke Updated Successfully");
+        }).error(function() {
+            console.log("error");
+        });
+    }
+    $scope.deleteJoke = function(index, jokeId) {
+        console.log(index, jokeId);
+        $http.delete('http://localhost:8000/api/v1/jokes/' + jokeId).success(function() {
+            $scope.jokes.splice(index, 1);
+        });;
+    }
+    $scope.init();
+    $scope.doRefresh = function() {
+        $scope.init();
+        $scope.$broadcast('scroll.refreshComplete');
+    }
+});
